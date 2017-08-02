@@ -12,8 +12,6 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.app.NotificationCompat;
 import android.view.View;
 
-import java.io.File;
-
 public class MainActivity extends AppCompatActivity {
 
     @Override
@@ -36,9 +34,12 @@ public class MainActivity extends AppCompatActivity {
                 .setWhen(System.currentTimeMillis()) // 设置发生时间
                 .setContentIntent(pi)    // 设置PendingIntent
                 .setAutoCancel(true)    // 设置自动取消
-                .setSound(Uri.fromFile(new File("/system/media/audio/ringtones/Luna.ogg"))) // 设置发生通知的时间
-                //        .setVibrate(new long[]{0, 1000, 1000, 1000})   // 设置振动，需要权限 <uses-permission android:name="android.permission.VIBRATE" />
-                //        .setLights(Color.GREEN, 1000, 1000)   // 设置灯光闪烁
+                //.setSound(Uri.fromFile(new File("/system/media/audio/ringtones/Luna.ogg"))) // 设置发生通知的时间
+                //.setVibrate(new long[]{0, 1000, 1000, 1000})   // 设置振动，需要权限 <uses-permission android:name="android.permission.VIBRATE" />
+                // .setLights(Color.GREEN, 1000, 1000)   // 设置灯光闪烁,参数：颜色，灯亮时间，灯灭时间
+                .setDefaults(NotificationCompat.DEFAULT_ALL)  // 使用默认效果
+                .setStyle(new NotificationCompat.BigPictureStyle().bigPicture(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher)))
+                .setPriority(NotificationCompat.PRIORITY_MAX)  // 设置优先级
                 .build();
 
         manager.notify(1, notification);
