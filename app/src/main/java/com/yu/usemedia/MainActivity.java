@@ -248,6 +248,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 获取图片路径
+     * @param uri
+     * @param selection
+     * @return
+     */
     private String getImagePath(Uri uri, String selection) {
         String path = null;
         // 通过Uri和selection来获取真实的图片路径
