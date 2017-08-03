@@ -1,24 +1,31 @@
 package com.yu.usemedia;
 
 import android.Manifest;
+import android.annotation.TargetApi;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.app.NotificationCompat;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -30,20 +37,25 @@ import java.util.Date;
 
 public class MainActivity extends AppCompatActivity {
 
+    // 拍照
     private static final int REQUEST_CODE_TAKE_PIC = 1;
-    private static final int REQUEST_CODE_OPEN_ALBUM = 2;
+    // 选择图片
+    private static final int REQUEST_CODE_CHOOSE_PHOTO = 2;
+
     private Uri imgUri;
-    private ImageView imgIv;
+    private ImageView mImgIv;
     File mOutputImage;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        imgIv = (ImageView) findViewById(R.id.imageView_reault);
+        mImgIv = (ImageView) findViewById(R.id.imageView_reault);
     }
 
     /**
      * 发生通知
+     *
      * @param view
      */
     public void sendNotification(View view) {
@@ -75,6 +87,7 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * 拍照
+     *
      * @param view
      */
     public void takePicture(View view) {
@@ -102,6 +115,7 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * 打开相册
+     *
      * @param view
      */
     public void openAlbum(View view) {
@@ -110,7 +124,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             Intent intent = new Intent("android.intent.action.GET_CONTENT");
             intent.setType("image/*");
-            startActivity(intent);
+            startActivityForResult(intent, REQUEST_CODE_CHOOSE_PHOTO);
         }
 
     }
@@ -124,7 +138,7 @@ public class MainActivity extends AppCompatActivity {
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     Intent intent = new Intent("android.intent.action.GET_CONTENT");
                     intent.setType("image/*");
-                    startActivity(intent);
+                    startActivityForResult(intent, REQUEST_CODE_CHOOSE_PHOTO);
                 } else {
                     Toast.makeText(this, "You denied the permission", Toast.LENGTH_SHORT).show();
                 }
@@ -137,24 +151,113 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         switch (requestCode) {
             case REQUEST_CODE_TAKE_PIC:
-                Bitmap bitmap = null;
-                try {
-                    bitmap = BitmapFactory.decodeStream(getContentResolver().openInputStream(imgUri));
-//                    Bitmap bitmap = BitmapFactory.decodeFile(mOutputImage.getPath(), new BitmapFactory.Options());
-                    if (bitmap == null) {
-                        Toast.makeText(this, "btimap is null", Toast.LENGTH_SHORT).show();
-                        return;
+                if (resultCode == RESULT_OK) {
+                    Bitmap bitmap = null;
+                    try {
+                        bitmap = BitmapFactory.decodeStream(getContentResolver().openInputStream(imgUri));
+                        //                    Bitmap bitmap = BitmapFactory.decodeFile(mOutputImage.getPath(), new BitmapFactory.Options());
+                        if (bitmap == null) {
+                            Toast.makeText(this, "btimap is null", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        Toast.makeText(this, "btimap is not null", Toast.LENGTH_SHORT).show();
+                        mImgIv.setImageBitmap(bitmap);
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
                     }
-                    Toast.makeText(this, "btimap is not null", Toast.LENGTH_SHORT).show();
-                    imgIv.setImageBitmap(bitmap);
-                } catch (FileNotFoundException e) {
-                    e.printStackTrace();
                 }
 
                 break;
-            case REQUEST_CODE_OPEN_ALBUM:
+            case REQUEST_CODE_CHOOSE_PHOTO:
+                if (resultCode == RESULT_OK) {
+                    // 在kitkat及以上版本，>=19
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                        handImageOnKitkat(data);
+                    } else {
+                        handImageBeforeKitkat(data);
 
+                    }
+                }
                 break;
         }
+    }
+
+    /**
+     * 处理图片，api<19
+     *
+     * @param data
+     */
+    @TargetApi(Build.VERSION_CODES.KITKAT)
+    private void handImageBeforeKitkat(Intent data) {
+        Uri uri = data.getData();
+        String imagePath = getImagePath(uri, null);
+        displayImage(imagePath);
+    }
+
+    /**
+     * 处理图片请求，api>=19
+     *
+     * @param data
+     */
+    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+    private void handImageOnKitkat(Intent data) {
+        String imgPath = null;
+        Uri uri = data.getData();
+        Uri treeUri = data.getData();
+        //Log.d("TAG", "handleImageOnKitKat: uri is " + uri);
+        if (DocumentsContract.isDocumentUri(this, uri)) {
+            //Log.e("TAG", "isDocumentUri");
+            // 如果是document类型的Uri，则通过document id处理
+            String documentId = DocumentsContract.getDocumentId(uri);
+           // Log.e("TAG", "documentId="+documentId);
+            if ("com.android.providers.media.documents".equals(uri.getAuthority())) {
+                String id = documentId.split(":")[1]; // 解析出数字格式的id
+                String selection = MediaStore.Images.Media._ID + "=" + id;
+                imgPath = getImagePath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, selection);
+            } else if ("com.android.providers.downloads.documents".equals(uri.getAuthority())) {
+                Uri contentUri = ContentUris.withAppendedId(Uri.parse("content://downloads/public_downloads"), Long.valueOf(documentId));
+                imgPath = getImagePath(contentUri, null);
+            } else if ("com.android.externalstorage.documents".equals(uri.getAuthority())) { // 外置sd卡
+                final String[] split = documentId.split(":");
+                final String type = split[0];
+                if ("primary".equalsIgnoreCase(type))
+                    imgPath = Environment.getExternalStorageDirectory() + "/" + split[1];
+            }
+        } else if ("content".equalsIgnoreCase(uri.getScheme())) {
+            // 如果是content类型的Uri，则使用普通方式处理
+            imgPath = getImagePath(uri, null);
+        } else if ("file".equalsIgnoreCase(uri.getScheme())) {
+            // 如果是file类型的Uri，直接获取图片路径即可
+            imgPath = uri.getPath();
+        }
+        displayImage(imgPath); // 根据图片路径显示图片
+    }
+
+    /**
+     * 显示图片
+     *
+     * @param imgPath
+     */
+    private void displayImage(String imgPath) {
+        if (imgPath != null) {
+            Bitmap bitmap = BitmapFactory.decodeFile(imgPath);
+            mImgIv.setImageBitmap(bitmap);
+            Log.e("TAG", "imgPath=" + imgPath);
+        } else {
+            Toast.makeText(this, "imgPath is null!", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private String getImagePath(Uri uri, String selection) {
+        String path = null;
+        // 通过Uri和selection来获取真实的图片路径
+        Cursor cursor = getContentResolver().query(uri, null, selection, null, null);
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
+            }
+            cursor.close();
+        }
+        return path;
     }
 }
